@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "author": "Projet 10 GLCC",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 48, "left": 420, "attrs": {} },
+    { "type": "wokwi-pir-motion-sensor", "id": "pir1", "top": -120, "left": 90, "attrs": {} },
+    { "type": "wokwi-hc-sr04", "id": "ultrasonic1", "top": 55, "left": 80, "attrs": { "distance": "150" } },
+    { "type": "wokwi-dht22", "id": "dht1", "top": 240, "left": 104, "attrs": { "temperature": "22", "humidity": "48" } },
+    { "type": "wokwi-pushbutton", "id": "btn1", "top": 418, "left": 145, "attrs": { "color": "blue", "label": "Sonnette" } },
+    { "type": "wokwi-lcd1602", "id": "lcd1", "top": -124, "left": 742, "attrs": { "pins": "i2c" } },
+    { "type": "wokwi-led", "id": "ledOccupee", "top": 154, "left": 798, "attrs": { "color": "green", "label": "Occupe" } },
+    { "type": "wokwi-led", "id": "ledVisiteur", "top": 246, "left": 798, "attrs": { "color": "blue", "label": "Visiteur" } },
+    { "type": "wokwi-buzzer", "id": "buzzer1", "top": 366, "left": 782, "attrs": { "volume": "0.1" } }
+  ],
+  "connections": [
+    [ "esp:3V3", "pir1:VCC", "red", [ "h0" ] ],
+    [ "esp:GND.1", "pir1:GND", "black", [ "h0" ] ],
+    [ "esp:14", "pir1:OUT", "green", [ "h0" ] ],
+
+    [ "esp:5V", "ultrasonic1:VCC", "red", [ "h0" ] ],
+    [ "esp:GND.1", "ultrasonic1:GND", "black", [ "h0" ] ],
+    [ "esp:5", "ultrasonic1:TRIG", "green", [ "h0" ] ],
+    [ "esp:18", "ultrasonic1:ECHO", "green", [ "h0" ] ],
+
+    [ "esp:3V3", "dht1:VCC", "red", [ "h0" ] ],
+    [ "esp:GND.1", "dht1:GND", "black", [ "h0" ] ],
+    [ "esp:4", "dht1:SDA", "green", [ "h0" ] ],
+
+    [ "esp:13", "btn1:1.l", "green", [ "h0" ] ],
+    [ "esp:GND.1", "btn1:2.r", "black", [ "h0" ] ],
+
+    [ "esp:5V", "lcd1:VCC", "red", [ "h0" ] ],
+    [ "esp:GND.1", "lcd1:GND", "black", [ "h0" ] ],
+    [ "esp:21", "lcd1:SDA", "green", [ "h0" ] ],
+    [ "esp:22", "lcd1:SCL", "green", [ "h0" ] ],
+
+    [ "esp:25", "ledOccupee:A", "green", [ "h0" ] ],
+    [ "esp:GND.2", "ledOccupee:C", "black", [ "h0" ] ],
+    [ "esp:26", "ledVisiteur:A", "blue", [ "h0" ] ],
+    [ "esp:GND.2", "ledVisiteur:C", "black", [ "h0" ] ],
+
+    [ "esp:12", "buzzer1:1", "green", [ "h0" ] ],
+    [ "esp:GND.2", "buzzer1:2", "black", [ "h0" ] ]
+  ],
+  "dependencies": {}
+}
+
