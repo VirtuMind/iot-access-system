@@ -83,6 +83,18 @@ String lastZone = "Aucune";
 String latestEvent = "Systeme initialise";
 
 /**
+ * Publie temperature et humidite des qu'une lecture DHT valide change.
+ */
+void publishDhtValues() {
+  if (!isnan(sensors.temperatureC)) {
+    Blynk.virtualWrite(V1, sensors.temperatureC);
+  }
+  if (!isnan(sensors.humidityPct)) {
+    Blynk.virtualWrite(8, sensors.humidityPct); // V8: humidite
+  }
+}
+
+/**
  * Convertit l'etat interne en texte lisible pour LCD, Serial et Blynk.
  */
 String stateToText(HomeState state) {
@@ -145,9 +157,23 @@ void readSensors() {
   if (now - lastDhtReadMs >= DHT_INTERVAL_MS) {
     lastDhtReadMs = now;
     TempAndHumidity th = dht.getTempAndHumidity();
-    sensors.temperatureC = th.temperature;
-    sensors.humidityPct = th.humidity;
-    
+    if (!isnan(th.temperature) && !isnan(th.humidity)) {
+      float tempDelta = th.temperature - sensors.temperatureC;
+      float humidityDelta = th.humidity - sensors.humidityPct;
+      if (tempDelta < 0) {
+        tempDelta = -tempDelta;
+      }
+      if (humidityDelta < 0) {
+        humidityDelta = -humidityDelta;
+      }
+
+      bool changedEnough = tempDelta >= 0.1 || humidityDelta >= 0.5;
+      sensors.temperatureC = th.temperature;
+      sensors.humidityPct = th.humidity;
+      if (changedEnough) {
+        publishDhtValues();
+      }
+    }
   }
 
   bool currentDoorbellRaw = digitalRead(PIN_DOORBELL);
@@ -180,7 +206,7 @@ void handleDoorbell() {
   tone(PIN_BUZZER, 1200);
   Blynk.virtualWrite(V7, 1);
   logEvent("Visiteur a la porte");
-  sendBlynkEvent("visiteur_porte", "Visiteur a la porte");
+  sendBlynkEvent("doorbell_button_pressed", "Visiteur a la porte");
 }
 
 /**
@@ -274,7 +300,7 @@ void updateLcd() {
 
   lcd.setCursor(0, 1);
   unsigned long secondsSincePresence = (millis() - lastPresenceMs) / 1000;
-  String line2 = lastZone + " " + String(secondsSincePresence) + "s";
+  String line2 = vacationMode ? "Vacances ON" : lastZone + " " + String(secondsSincePresence) + "s";
   lcd.print(line2.substring(0, 16));
 }
 
@@ -283,12 +309,11 @@ void updateLcd() {
  */
 void sendToBlynk() {
   Blynk.virtualWrite(V0, stateToText(currentState));
-  Blynk.virtualWrite(V1, sensors.temperatureC);
   Blynk.virtualWrite(V4, sensors.distanceCm);
   Blynk.virtualWrite(V5, sensors.pirActive ? 1 : 0);
   Blynk.virtualWrite(V6, occupiedSecondsToday / 3600.0);
   Blynk.virtualWrite(V7, buzzerActive ? 1 : 0);
-  Blynk.virtualWrite(8, sensors.humidityPct); // V8: humidite
+  publishDhtValues();
 }
 
 /**
@@ -305,6 +330,14 @@ BLYNK_WRITE(V3) {
   vacationMode = param.asInt() == 1;
   vacationAlertSent = false;
   logEvent(vacationMode ? "Mode vacances active" : "Mode vacances desactive");
+  updateLcd();
+
+  bool occupiedNow = currentState == OCCUPE || currentState == VISITEUR || isPresenceConfirmed();
+  if (vacationMode && occupiedNow) {
+    logEvent("Alerte vacances: mouvement");
+    sendBlynkEvent("mouvement_vacances", "Mouvement detecte en mode vacances");
+    vacationAlertSent = true;
+  }
 }
 
 void setup() {
