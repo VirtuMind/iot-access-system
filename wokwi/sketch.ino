@@ -1,6 +1,6 @@
-#define BLYNK_TEMPLATE_ID "TMPLxxxxxx"
-#define BLYNK_TEMPLATE_NAME "Presence Domicile"
-#define BLYNK_AUTH_TOKEN "VotreAuthToken"
+#define BLYNK_TEMPLATE_ID "TMPL2Aa65cXZf"
+#define BLYNK_TEMPLATE_NAME "access system"
+#define BLYNK_AUTH_TOKEN "4l_8-4SqiyQ95Ft06hMbgJA0rLM_vDtf"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
@@ -26,11 +26,13 @@ char pass[] = "";
 const unsigned long REAL_EMPTY_TIMEOUT_MS = 10UL * 60UL * 1000UL;
 const unsigned long SIM_EMPTY_TIMEOUT_MS = 30UL * 1000UL;
 const unsigned long SIM_LONG_ABSENCE_TIMEOUT_MS = 60UL * 1000UL;
-const unsigned long SENSOR_INTERVAL_MS = 500UL;
+const unsigned long SENSOR_INTERVAL_MS = 100UL;
+const unsigned long DHT_INTERVAL_MS = 2000UL;
 const unsigned long LCD_INTERVAL_MS = 1000UL;
-const unsigned long BLYNK_INTERVAL_MS = 2000UL;
+const unsigned long BLYNK_INTERVAL_MS = 1000UL;
 const unsigned long VISITOR_DISPLAY_MS = 5000UL;
-const unsigned long BUZZER_RING_MS = 900UL;
+const unsigned long BUZZER_RING_MS = 500UL;
+const unsigned long DOORBELL_DEBOUNCE_MS = 350UL;
 const unsigned long OCCUPANCY_ACCUM_INTERVAL_MS = 1000UL;
 
 const float PRESENCE_DISTANCE_CM = 200.0;
@@ -60,17 +62,20 @@ HomeState currentState = VIDE;
 HomeState lastPublishedState = VIDE;
 
 bool vacationMode = false;
+bool buzzerActive = false;
 bool lowTempAlertSent = false;
 bool vacationAlertSent = false;
 bool lastDoorbellRaw = HIGH;
 bool lastConfirmedPresence = false;
 
 unsigned long lastPresenceMs = 0;
+unsigned long lastDhtReadMs = 0;
 unsigned long lastSensorReadMs = 0;
 unsigned long lastLcdUpdateMs = 0;
 unsigned long lastBlynkUpdateMs = 0;
 unsigned long visitorStartedMs = 0;
 unsigned long buzzerStartedMs = 0;
+unsigned long lastDoorbellEventMs = 0;
 unsigned long lastOccupancyAccumMs = 0;
 unsigned long occupiedSecondsToday = 0;
 
@@ -122,7 +127,7 @@ float readDistanceCm() {
   delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
 
-  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 30000UL);
+  unsigned long duration = pulseIn(PIN_ECHO, HIGH, 23300UL);
   if (duration == 0) {
     return 999.0;
   }
@@ -136,14 +141,18 @@ void readSensors() {
   sensors.pirActive = digitalRead(PIN_PIR) == HIGH;
   sensors.distanceCm = readDistanceCm();
 
-  TempAndHumidity th = dht.getTempAndHumidity();
-  if (!isnan(th.temperature)) {
+  unsigned long now = millis();
+  if (now - lastDhtReadMs >= DHT_INTERVAL_MS) {
+    lastDhtReadMs = now;
+    TempAndHumidity th = dht.getTempAndHumidity();
     sensors.temperatureC = th.temperature;
     sensors.humidityPct = th.humidity;
+    
   }
 
   bool currentDoorbellRaw = digitalRead(PIN_DOORBELL);
-  sensors.doorbellPressed = (lastDoorbellRaw == HIGH && currentDoorbellRaw == LOW);
+  bool doorbellFallingEdge = lastDoorbellRaw == HIGH && currentDoorbellRaw == LOW;
+  sensors.doorbellPressed = doorbellFallingEdge && now - lastDoorbellEventMs > DOORBELL_DEBOUNCE_MS;
   lastDoorbellRaw = currentDoorbellRaw;
 }
 
@@ -165,8 +174,11 @@ void handleDoorbell() {
   currentState = VISITEUR;
   visitorStartedMs = millis();
   buzzerStartedMs = millis();
+  lastDoorbellEventMs = millis();
+  buzzerActive = true;
   digitalWrite(PIN_LED_VISITOR, HIGH);
   tone(PIN_BUZZER, 1200);
+  Blynk.virtualWrite(V7, 1);
   logEvent("Visiteur a la porte");
   sendBlynkEvent("visiteur_porte", "Visiteur a la porte");
 }
@@ -245,8 +257,10 @@ void updateOccupancyCounter() {
 void updateOutputs() {
   digitalWrite(PIN_LED_OCCUPIED, currentState == OCCUPE || currentState == VISITEUR);
 
-  if (millis() - buzzerStartedMs > BUZZER_RING_MS) {
+  if (buzzerActive && millis() - buzzerStartedMs > BUZZER_RING_MS) {
     noTone(PIN_BUZZER);
+    buzzerActive = false;
+    Blynk.virtualWrite(V7, 0);
   }
 }
 
@@ -270,10 +284,18 @@ void updateLcd() {
 void sendToBlynk() {
   Blynk.virtualWrite(V0, stateToText(currentState));
   Blynk.virtualWrite(V1, sensors.temperatureC);
-  Blynk.virtualWrite(V2, latestEvent);
   Blynk.virtualWrite(V4, sensors.distanceCm);
   Blynk.virtualWrite(V5, sensors.pirActive ? 1 : 0);
   Blynk.virtualWrite(V6, occupiedSecondsToday / 3600.0);
+  Blynk.virtualWrite(V7, buzzerActive ? 1 : 0);
+  Blynk.virtualWrite(8, sensors.humidityPct); // V8: humidite
+}
+
+/**
+ * Synchronise les commandes venant du dashboard apres connexion/reconnexion.
+ */
+BLYNK_CONNECTED() {
+  Blynk.syncVirtual(V3);
 }
 
 /**
@@ -342,4 +364,3 @@ void loop() {
     sendToBlynk();
   }
 }
-
