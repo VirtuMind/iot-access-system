@@ -340,6 +340,33 @@ BLYNK_WRITE(V3) {
   }
 }
 
+// Connect to wifi and Blynk
+void connectWifiAndBlynk() {
+  Serial.print("Connexion Wi-Fi...");
+  WiFi.begin(ssid, pass); // no channel hardcoded
+
+  unsigned long startMs = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startMs < 15000UL) {
+    delay(250);
+    Serial.print(".");
+  }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\nWi-Fi echoue — mode local");
+    return;
+  }
+
+  Serial.print("\nIP=");
+  Serial.println(WiFi.localIP());
+
+  Blynk.config(BLYNK_AUTH_TOKEN);
+  if (Blynk.connect(5000)) {
+    Serial.println("Blynk connecte");
+  } else {
+    Serial.println("Blynk non connecte");
+  }
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -361,7 +388,7 @@ void setup() {
   lastPresenceMs = millis();
   lastOccupancyAccumMs = millis();
 
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  connectWifiAndBlynk();
   logEvent("Systeme initialise");
 }
 
